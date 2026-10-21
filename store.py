@@ -1,19 +1,35 @@
+import json        # turns Python values into text and back, for saving to files
+import logging     # prints warnings into the server's log
+import os          # works with folders and files
+import threading   # locks and background threads
+
+log = logging.getLogger("kvstore.store")
+
 class KVStore:
     def __init__(self, data_dir="data", snapshot_interval=30.0, fsync=False):
-        """Load existing data from data_dir (recovery) and get ready."""
+        self.data_dir = data_dir
+        self.snapshot_interval = snapshot_interval
+        self.fsync = fsync
+        self._data = {}
 
     def get(self, key):
-        """Return (found, value). found is True/False; value may be None."""
+        if key in self._data:
+            return True, self._data[key]
+        return False, None
 
     def put(self, key, value):
-        """Store value. Return True if the key already existed (update),
-        False if it is new (create). Raise OSError if saving to disk fails."""
+        existed = key in self._data
+        self._data[key] = value
+        return existed
 
     def delete(self, key):
-        """Remove key. Return True if it existed, False if it did not."""
+        if key not in self._data:
+            return False
+        del self._data[key]
+        return True
 
     def __len__(self):
-        """Number of keys."""
+        return len(self._data)
 
     def close(self):
-        """Final snapshot and close files. Called once, on shutdown."""
+        pass
