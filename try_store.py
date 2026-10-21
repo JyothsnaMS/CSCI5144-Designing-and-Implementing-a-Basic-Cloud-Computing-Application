@@ -1,19 +1,14 @@
-import threading
+import os
+import sys
 from store import KVStore
 
-for run in range(10):
-    s = KVStore()
-    s.put("x", 1)
-    start_gun = threading.Barrier(20)   # makes all 20 threads start at the same instant
-    results = []
-
-    def worker():
-        start_gun.wait()
-        results.append(s.delete("x"))
-
-    threads = [threading.Thread(target=worker) for _ in range(20)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()                         # wait for all of them to finish
-    print("run", run, "successful deletes:", results.count(True))
+s = KVStore()
+if sys.argv[1] == "write":
+    s.put("course", "CSCI 5144")
+    s.put("temp", 1)
+    s.delete("temp")
+    print("written; now crashing on purpose")
+    os._exit(1)            # dies instantly: no cleanup, like a real crash
+else:
+    print("course:", s.get("course"))   # expect (True, 'CSCI 5144')
+    print("temp:", s.get("temp"))       # expect (False, None)
