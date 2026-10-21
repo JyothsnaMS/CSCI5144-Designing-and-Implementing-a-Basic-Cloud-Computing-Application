@@ -15,6 +15,18 @@ class KVStore:
         os.makedirs(self.data_dir, exist_ok=True)   # create data/ if missing
         self._recover()                              # rebuild _data from old logs
         self._wal = open(self._wal_path(self._wal_gen), "a", encoding="utf-8")
+        self._stop = threading.Event()
+        self._thread = None
+        if self.snapshot_interval > 0:
+            self._thread = threading.Thread(target=self._snapshot_loop, daemon=True)
+            self._thread.start()
+
+    def _snapshot_loop(self):
+        while not self._stop.wait(self.snapshot_interval):
+            try:
+                self.snapshot()
+            except Exception:
+                log.exception("Snapshot failed")
 
     def get(self, key):
         with self._lock:
@@ -42,7 +54,11 @@ class KVStore:
             return len(self._data)
 
     def close(self):
-        pass
+        self._stop.set()          # tell the background thread to stop
+        if self._thread:
+            self._thread.join()   # wait until it has stopped
+        self.snapshot()           # one last photo
+        self._wal.close()
 
     def _wal_path(self, n):
         return os.path.join(self.data_dir, f"wal-{n}.log")
@@ -62,11 +78,21 @@ class KVStore:
             os.fsync(self._wal.fileno())
 
     def _recover(self):
-        last = 0
+        start = 1
+        if os.path.exists(self._snapshot_path()):
+            with open(self._snapshot_path(), encoding="utf-8") as f:
+                snap = json.load(f)
+            self._data = snap["data"]
+            start = snap["wal_gen"]
+
+        last = start - 1
         for n in self._wal_numbers():
+            if n < start:
+                os.remove(self._wal_path(n))   # leftover, already in the snapshot
+                continue
             self._replay(self._wal_path(n))
             last = n
-        self._wal_gen = last + 1        # this run writes to a brand-new file
+        self._wal_gen = last + 1
 
     def _replay(self, path):
         with open(path, encoding="utf-8") as f:
@@ -83,3 +109,29 @@ class KVStore:
                     self._data[record["key"]] = record["value"]
                 elif record["op"] == "del":
                     self._data.pop(record["key"], None)
+
+    def snapshot(self):
+        # Part 1, inside the lock (quick): copy the data, switch to a new log file
+        with self._lock:
+            data_copy = dict(self._data)
+            self._wal.close()
+            self._wal_gen += 1
+            new_gen = self._wal_gen
+            self._wal = open(self._wal_path(new_gen), "a", encoding="utf-8")
+
+        # Part 2, outside the lock (slow disk work; requests keep flowing)
+        tmp_path = self._snapshot_path() + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump({"wal_gen": new_gen, "data": data_copy}, f)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, self._snapshot_path())
+
+        # Part 3: older logs are now inside the snapshot, so delete them
+        for n in self._wal_numbers():
+            if n < new_gen:
+                os.remove(self._wal_path(n))
+        log.info("Snapshot saved: %d keys", len(data_copy))
+
+    def _snapshot_path(self):
+        return os.path.join(self.data_dir, "snapshot.json")
