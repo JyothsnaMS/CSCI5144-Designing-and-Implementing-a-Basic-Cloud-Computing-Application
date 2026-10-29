@@ -2,6 +2,7 @@
 import argparse
 import logging
 import os
+import signal
 import time
 from logging.handlers import RotatingFileHandler
 
@@ -49,7 +50,9 @@ def create_app(store=None, log_dir="logs"):
     app.config["MAX_CONTENT_LENGTH"] = MAX_BODY_SIZE
 
     logger = configure_logging(log_dir)
-    app.extensions["kvstore"] = store if store is not None else KVStore()
+    app.extensions["kvstore"] = (
+        store if store is not None else KVStore()
+    )
 
     @app.before_request
     def start_timer():
@@ -57,10 +60,16 @@ def create_app(store=None, log_dir="logs"):
 
     @app.after_request
     def log_request(response):
-        started = getattr(request, "start_time", time.perf_counter())
+        started = getattr(
+            request, "start_time", time.perf_counter()
+        )
         elapsed_ms = (time.perf_counter() - started) * 1000
 
-        key = request.view_args.get("key", "-") if request.view_args else "-"
+        key = (
+            request.view_args.get("key", "-")
+            if request.view_args
+            else "-"
+        )
         client_ip = request.remote_addr or "-"
 
         logger.info(
@@ -100,7 +109,10 @@ def create_app(store=None, log_dir="logs"):
         if not key or len(key) > MAX_KEY_LENGTH:
             return jsonify({
                 "error": "Bad Request",
-                "message": f"Key must be between 1 and {MAX_KEY_LENGTH} characters.",
+                "message": (
+                    f"Key must be between 1 and "
+                    f"{MAX_KEY_LENGTH} characters."
+                ),
             }), 400
 
         kv = app.extensions["kvstore"]
@@ -128,13 +140,18 @@ def create_app(store=None, log_dir="logs"):
             if not isinstance(body, dict) or "value" not in body:
                 return jsonify({
                     "error": "Bad Request",
-                    "message": "Request body must be a JSON object containing 'value'.",
+                    "message": (
+                        "Request body must be a JSON object "
+                        "containing 'value'."
+                    ),
                 }), 400
 
             try:
                 updated = kv.put(key, body["value"])
             except OSError:
-                logger.exception("Storage write failed for key %r", key)
+                logger.exception(
+                    "Storage write failed for key %r", key
+                )
                 return jsonify({
                     "error": "Storage Error",
                     "message": "The value could not be saved.",
@@ -164,7 +181,9 @@ def create_app(store=None, log_dir="logs"):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Basic cloud key-value store")
+    parser = argparse.ArgumentParser(
+        description="Basic cloud key-value store"
+    )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--threads", type=int, default=8)
@@ -183,6 +202,12 @@ def main():
     app = create_app(store=store, log_dir=args.log_dir)
 
     from waitress import serve
+
+    # Handle Docker's SIGTERM signal using the existing cleanup path.
+    def handle_sigterm(signum, frame):
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, handle_sigterm)
 
     try:
         serve(
