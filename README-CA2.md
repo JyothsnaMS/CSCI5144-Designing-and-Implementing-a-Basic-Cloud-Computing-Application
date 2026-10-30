@@ -2,9 +2,14 @@
 
 ## Overview
 
-This project implements a single-server key-value store for the CSCI 5144 Cloud Computing assignment. It exposes an HTTP API for storing, retrieving, updating, and deleting key-value pairs.
+This project implements a single-server key-value store for the CSCI 5144 Cloud Computing course. It exposes an HTTP API for storing, retrieving, updating and deleting key-value pairs.
 
-It demonstrates core cloud computing concepts including concurrent request handling, data persistence, error handling, logging, performance benchmarking, and containerization using Docker.
+It demonstrates core cloud computing concepts: concurrent request handling, data persistence, error handling, logging, performance benchmarking and containerization with Docker.
+
+| Assignment | What it covers | Git tag |
+|---|---|---|
+| Coding Assignment 1 | Key-value store server (this README, all sections except Docker) | `ca1-submission` |
+| Coding Assignment 2 | Dockerizing the server (see [Running with Docker](#running-with-docker)) | `ca2-submission` |
 
 ## Features
 
@@ -12,14 +17,14 @@ It demonstrates core cloud computing concepts including concurrent request handl
 - **GET:** Retrieve the value stored under a key.
 - **DELETE:** Remove a key and its value.
 - **Health check:** `GET /` reports that the server is running and how many keys it holds.
-- **Concurrency:** Storage operations are synchronized with a lock to protect shared data.
-- **Persistence:** A write-ahead log (WAL), periodic snapshots, and startup recovery support data persistence across restarts.
+- **Concurrency:** Storage operations are synchronized with a lock, so concurrent PUT/DELETE requests on the same key are safe.
+- **Persistence:** A write-ahead log (WAL), periodic snapshots and startup recovery preserve data across restarts and crashes.
 - **Error handling:** Errors are returned as JSON with appropriate HTTP status codes.
-- **Logging:** Requests are logged with timestamps, methods, keys, status codes, client addresses, and latency.
-- **Benchmarking:** Throughput and latency are measured using concurrent client threads.
-- **Docker support:** The application can be built and run inside a Docker container.
-- **Persistent Docker storage:** A named Docker volume preserves application data across container recreation.
-- **Graceful shutdown:** SIGTERM handling allows the server to close its storage layer when the container is stopped normally.
+- **Logging:** Every request is logged with a timestamp, method, key, status code, client address and latency.
+- **Benchmarking:** Throughput and latency are measured with concurrent client threads.
+- **Docker support:** The server runs in a lightweight Alpine-based container.
+- **Persistent Docker storage:** A named Docker volume preserves data across container removal and recreation.
+- **Graceful shutdown:** SIGTERM handling lets `docker stop` save a final snapshot and exit cleanly.
 
 ## Technologies
 
@@ -28,39 +33,36 @@ It demonstrates core cloud computing concepts including concurrent request handl
 - Waitress (multi-threaded WSGI server)
 - pytest (automated tests)
 - Requests (benchmark client)
-- Docker
-- Alpine Linux
+- Docker, with the `python:3.11-alpine` base image
 - JSON request and response bodies
 
 ## Project Structure
 
 ```text
-cloud-assignment/
-├── server.py             # HTTP server, API endpoints, logging, signal handling
-├── store.py              # Storage, locking, WAL, snapshots, recovery
+CSCI5144-Designing-and-Implementing-a-Basic-Cloud-Computing-Application/
+├── server.py             # HTTP server: API endpoints, validation, logging, signal handling
+├── store.py              # Storage: locking, write-ahead log, snapshots, recovery
 ├── benchmark.py          # Concurrent performance benchmark
-├── try_store.py          # Script for testing the storage layer directly
+├── try_store.py          # Script for trying the storage layer directly
 ├── requirements.txt      # Python dependencies
 ├── Dockerfile            # Docker image build instructions
 ├── .dockerignore         # Files excluded from the Docker build context
 ├── README.md             # Project documentation
 ├── tests/
 │   ├── test_server.py    # API endpoint tests
-│   └── test_store.py     # Storage, concurrency, and recovery tests
-├── data/                 # Runtime snapshot and WAL files
-└── logs/                 # Runtime request logs
+│   └── test_store.py     # Storage, concurrency and recovery tests
+├── data/                 # Snapshot and WAL files (created at runtime, not committed)
+└── logs/                 # Request logs (created at runtime, not committed)
 ```
-
-The `data/` and `logs/` directories are created at runtime and are not committed to the repository.
 
 ## Setup and Installation
 
-Python 3.9 or newer is required. The project was developed and tested using Python 3.11.
+Python 3.9 or newer is required. The project was developed and tested with Python 3.11.
 
 ### macOS / Linux
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
@@ -73,7 +75,7 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-If PowerShell prevents virtual environment activation, the environment's Python executable can be used directly:
+If PowerShell blocks activation, use the environment's Python directly:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
@@ -87,13 +89,7 @@ With the virtual environment activated:
 python server.py
 ```
 
-The server listens on:
-
-```text
-http://127.0.0.1:8080
-```
-
-Keep the server running and send requests from a second terminal.
+The server listens on `http://127.0.0.1:8080`. Keep it running and send requests from a second terminal.
 
 Press **Ctrl+C** to stop the server gracefully. The storage layer closes and saves a final snapshot.
 
@@ -101,13 +97,13 @@ Press **Ctrl+C** to stop the server gracefully. The storage layer closes and sav
 
 | Option | Default | Description |
 |---|---|---|
-| `--host` | `127.0.0.1` | Address to listen on |
+| `--host` | `127.0.0.1` | Address to listen on (`0.0.0.0` accepts connections from other machines and from Docker port mapping) |
 | `--port` | `8080` | Server port |
 | `--threads` | `8` | Number of worker threads |
-| `--data-dir` | `data` | Directory containing snapshots and WAL files |
-| `--log-dir` | `logs` | Directory containing request logs |
+| `--data-dir` | `data` | Directory for snapshots and WAL files |
+| `--log-dir` | `logs` | Directory for request logs |
 | `--snapshot-interval` | `30` | Seconds between background snapshots |
-| `--fsync` | Disabled | Force WAL writes to disk for stronger durability |
+| `--fsync` | Disabled | Force every WAL write to disk for stronger durability |
 
 Example:
 
@@ -117,25 +113,38 @@ python server.py --port 9000 --fsync
 
 ## Running with Docker
 
-Docker provides a consistent environment for running the key-value store without manually installing Python dependencies on the host machine.
+Docker packages the server together with Python and all its dependencies, so it runs the same way on any machine without installing Python packages on the host.
+
+### Assignment 2 Requirements
+
+| Requirement | How it is met |
+|---|---|
+| 1. Lightweight base image with Python | `FROM python:3.11-alpine` |
+| 2. Application files added to the image | `COPY server.py store.py ./` |
+| 3. Dependencies installed in the image | `COPY requirements.txt .` and `RUN pip install --no-cache-dir -r requirements.txt` |
+| 4. Server port exposed | `EXPOSE 8080`, published at run time with `-p 8080:8080` |
+| 5. Server starts automatically | `CMD ["python", "server.py", "--host", "0.0.0.0", "--port", "8080"]` |
 
 ### Prerequisites
 
-- Docker Desktop installed and running.
-- Project source code available locally.
-- Port 8080 available on the host machine.
+- Docker Desktop installed and running ("Engine running").
+- Port 8080 free on the host. Stop any locally running `python server.py` first.
 
 ### 1. Build the Docker Image
 
-Open a terminal in the project root directory and run:
+From the project root:
 
 ```bash
 docker build -t kv-store .
 ```
 
-This builds a Docker image named `kv-store` using the project's `Dockerfile`.
+This builds an image named `kv-store` from the `Dockerfile`: Python 3.11 on Alpine Linux, the dependencies from `requirements.txt`, and the application files. The resulting image is about 115 MB.
 
-The Dockerfile uses Python 3.11 on Alpine Linux, installs the dependencies from `requirements.txt`, and copies the application files into the image.
+Check that it exists:
+
+```bash
+docker images kv-store
+```
 
 ### 2. Run the Docker Container
 
@@ -143,221 +152,180 @@ The Dockerfile uses Python 3.11 on Alpine Linux, installs the dependencies from 
 docker run -d --name kv -p 8080:8080 -v kv-data:/app/data kv-store
 ```
 
-Explanation of the command:
-
 | Option | Purpose |
 |---|---|
-| `-d` | Runs the container in detached mode (background) |
-| `--name kv` | Assigns the container the name `kv` |
-| `-p 8080:8080` | Maps host port 8080 to container port 8080 |
-| `-v kv-data:/app/data` | Mounts a named Docker volume for persistent data |
-| `kv-store` | Specifies the image to run |
+| `-d` | Run the container in the background (detached) |
+| `--name kv` | Name the container `kv` |
+| `-p 8080:8080` | Map host port 8080 to container port 8080 |
+| `-v kv-data:/app/data` | Mount the named volume `kv-data` for persistent data |
+| `kv-store` | The image to run |
 
-The application is accessible at:
+Check that it is running:
 
-```text
-http://localhost:8080
+```bash
+docker ps
 ```
 
-The server binds to `0.0.0.0` inside the container so it can accept connections through Docker's port mapping.
+The `kv` container should show `Up` and `0.0.0.0:8080->8080/tcp`. The server needs a moment to start, so wait about 3 seconds before sending the first request.
+
+Inside the container the server binds to `0.0.0.0`, so it accepts connections forwarded through Docker's port mapping. With the default `127.0.0.1` it would only accept connections from inside the container.
 
 ### 3. Test the API
-
-Create a key:
 
 **macOS / Linux:**
 
 ```bash
-curl -X PUT http://localhost:8080/docker-test \
-  -H "Content-Type: application/json" \
-  -d '{"value":"hello from Docker"}'
-```
-
-Retrieve the key:
-
-```bash
+curl http://localhost:8080/
+curl -X PUT http://localhost:8080/docker-test -H "Content-Type: application/json" -d '{"value":"hello from Docker"}'
 curl http://localhost:8080/docker-test
-```
-
-Delete the key:
-
-```bash
 curl -X DELETE http://localhost:8080/docker-test
 ```
 
 **Windows PowerShell:**
 
-Create a key:
-
 ```powershell
+Invoke-RestMethod -Method Get -Uri "http://localhost:8080/"
 Invoke-RestMethod -Method Put -Uri "http://localhost:8080/docker-test" -ContentType "application/json" -Body '{"value":"hello from Docker"}'
-```
-
-Retrieve the key:
-
-```powershell
 Invoke-RestMethod -Method Get -Uri "http://localhost:8080/docker-test"
-```
-
-Delete the key:
-
-```powershell
 Invoke-RestMethod -Method Delete -Uri "http://localhost:8080/docker-test"
 ```
+
+The benchmark also runs unchanged against the container, from the host:
+
+```bash
+python benchmark.py
+```
+
+#### Verified results (macOS, Docker Desktop)
+
+| Request | Expected and observed status |
+|---|---|
+| `GET /` | `200` with `{"keys":0,"status":"running"}` |
+| `PUT /course` (new key) | `201` created |
+| `PUT /course` (existing key) | `200` updated |
+| `GET /course` | `200` with the stored value |
+| `DELETE /course` | `200` deleted |
+| `GET /course` (after delete) | `404` not found |
+| `PUT /x` with an invalid body | `400` bad request |
+| `PATCH /x` | `405` method not allowed |
 
 ### 4. View Container Logs
 
 ```bash
-docker logs kv
+docker logs kv        # all log output
+docker logs -f kv     # follow new log lines continuously
 ```
 
-To follow logs continuously:
+Every request appears with a timestamp, for example:
+
+```text
+2026-10-30 04:53:47,034 INFO operation=PUT key='course' status=201 client=192.168.65.1 latency_ms=0.72
+```
+
+`client=192.168.65.1` is the Docker Desktop host address, which confirms the requests came from outside the container through the published port. Timestamps inside the container are in UTC.
+
+To open a shell inside the running container:
 
 ```bash
-docker logs -f kv
+docker exec -it kv sh
+ls /app          # server.py, store.py, data/, logs/
+ls /app/data     # snapshot.json and wal-N.log files
+exit
 ```
 
-### 5. Stop and Restart the Container
-
-Stop the container gracefully:
+### 5. Stop, Restart and Remove the Container
 
 ```bash
-docker stop kv
+docker stop kv      # stop gracefully
+docker start kv     # restart the same container
+docker rm kv        # remove the stopped container
 ```
 
-Restart the existing container:
-
-```bash
-docker start kv
-```
-
-Remove the stopped container:
-
-```bash
-docker rm kv
-```
-
-To recreate it using the same persistent volume:
+To recreate the container with the same data:
 
 ```bash
 docker run -d --name kv -p 8080:8080 -v kv-data:/app/data kv-store
 ```
 
-The named volume is retained even after the container is removed.
+The named volume `kv-data` is kept when the container is removed. To delete all stored data and start fresh, run `docker rm -f kv` and then `docker volume rm kv-data`.
 
 ### 6. Verify Persistent Storage
 
-Create a key:
-
-```powershell
-Invoke-RestMethod -Method Put -Uri "http://localhost:8080/persist-test" -ContentType "application/json" -Body '{"value":"saved-data"}'
-```
-
-Stop and remove the container:
+**macOS / Linux:**
 
 ```bash
+curl -X PUT http://localhost:8080/survivor -H "Content-Type: application/json" -d '{"value":"still here"}'
 docker stop kv
 docker rm kv
-```
-
-Recreate it using the same volume:
-
-```bash
 docker run -d --name kv -p 8080:8080 -v kv-data:/app/data kv-store
+sleep 3
+curl http://localhost:8080/survivor
 ```
 
-Retrieve the stored key:
+**Windows PowerShell:**
 
 ```powershell
-Invoke-RestMethod -Method Get -Uri "http://localhost:8080/persist-test"
+Invoke-RestMethod -Method Put -Uri "http://localhost:8080/survivor" -ContentType "application/json" -Body '{"value":"still here"}'
+docker stop kv
+docker rm kv
+docker run -d --name kv -p 8080:8080 -v kv-data:/app/data kv-store
+Start-Sleep -Seconds 3
+Invoke-RestMethod -Method Get -Uri "http://localhost:8080/survivor"
 ```
 
-The value should still be available because the application's data is stored in the named Docker volume rather than the container's writable layer.
+Result in our test: the brand-new container returned `{"key":"survivor","value":"still here"}`. The data is stored in the named volume, not in the container's writable layer, so it survives container removal.
 
 ### 7. Test Crash Recovery
 
-Create a key:
+`docker kill` sends SIGKILL, which stops the container immediately without a final snapshot.
 
-```powershell
-Invoke-RestMethod -Method Put -Uri "http://localhost:8080/crash-test" -ContentType "application/json" -Body '{"value":"recover-me"}'
-```
-
-Forcefully terminate the container:
+**macOS / Linux:**
 
 ```bash
+curl -X PUT http://localhost:8080/crash2 -H "Content-Type: application/json" -d '{"value":"survives"}'
 docker kill kv
-```
-
-Remove the container:
-
-```bash
 docker rm kv
-```
-
-Recreate the container with the existing volume:
-
-```bash
 docker run -d --name kv -p 8080:8080 -v kv-data:/app/data kv-store
+sleep 3
+curl http://localhost:8080/crash2
 ```
 
-Retrieve the key:
+**Windows PowerShell:**
 
 ```powershell
-Invoke-RestMethod -Method Get -Uri "http://localhost:8080/crash-test"
+Invoke-RestMethod -Method Put -Uri "http://localhost:8080/crash2" -ContentType "application/json" -Body '{"value":"survives"}'
+docker kill kv
+docker rm kv
+docker run -d --name kv -p 8080:8080 -v kv-data:/app/data kv-store
+Start-Sleep -Seconds 3
+Invoke-RestMethod -Method Get -Uri "http://localhost:8080/crash2"
 ```
 
-In our local test, the value `recover-me` was successfully recovered after recreating the container.
+Result in our test: the new container returned `{"key":"crash2","value":"survives"}`. The value was rebuilt from the write-ahead log during startup recovery.
 
-This demonstrates WAL-based recovery for the tested container termination scenario. It does not guarantee recovery from every possible storage failure or sudden power loss.
+This demonstrates recovery after a process crash. Without `--fsync`, a sudden power loss of the host could still lose the most recent writes.
 
 ### 8. Graceful Shutdown
 
-The server handles the SIGTERM signal sent by Docker during a normal container stop.
+`docker stop kv` sends SIGTERM to the container's main process:
 
-When `docker stop kv` is executed:
+1. The Python signal handler in `server.py` raises `KeyboardInterrupt`.
+2. The server's cleanup code calls the storage layer's `close()` method.
+3. The storage layer stops its background snapshot thread, writes a final snapshot and closes the WAL.
 
-1. Docker sends SIGTERM to the container's main process.
-2. The Python signal handler raises `KeyboardInterrupt`.
-3. The server's cleanup logic calls the storage layer's `close()` method.
-4. The storage layer stops its background snapshot thread, writes a final snapshot, and closes the WAL.
+Without this handler, the server runs as PID 1 in the container, which ignores SIGTERM by default. Docker would then wait 10 seconds and force-kill the process with no final snapshot.
 
-The clean-shutdown test returned:
-
-```text
-Status=exited ExitCode=0 OOMKilled=false
-```
-
-This confirms that the tested container stopped successfully without being killed due to an out-of-memory condition.
+Result in our test: `docker stop kv` completed in **0.45 seconds**, and the last log line was `Snapshot saved: 301 keys`. The container exited with `Status=exited ExitCode=0 OOMKilled=false`.
 
 ### Docker Design Choices
 
-**Lightweight base image**
-
-The Dockerfile uses `python:3.11-alpine` to reduce the image size compared with larger general-purpose Python images.
-
-**Dependency layer caching**
-
-The Dockerfile copies `requirements.txt` and installs dependencies before copying the application source files. This allows Docker to reuse the dependency layer when only application code changes.
-
-**Unbuffered Python output**
-
-`PYTHONUNBUFFERED=1` allows application output to appear promptly in Docker logs.
-
-**Network accessibility**
-
-The container starts the server with `--host 0.0.0.0`, making it accessible through Docker's published port.
-
-**Exec-form CMD**
-
-The Dockerfile uses the JSON-array form of `CMD`, allowing the Python process to receive termination signals directly.
-
-**Persistent storage**
-
-The named volume `kv-data` is mounted at `/app/data`, preserving the application's snapshot and WAL files across container recreation.
-
-**Build context exclusions**
-
-The `.dockerignore` file excludes Git metadata, virtual environments, Python caches, local data, and log files from the Docker build context.
+- **Lightweight base image:** `python:3.11-alpine` keeps the image small (about 115 MB). The dependencies are pure Python, so no extra build tools are needed on Alpine.
+- **Dependency layer caching:** `requirements.txt` is copied and installed before the source files, so a code change reuses the cached dependency layer and rebuilds in seconds.
+- **Unbuffered output:** `PYTHONUNBUFFERED=1` makes log lines appear immediately in `docker logs`; `PYTHONDONTWRITEBYTECODE=1` avoids writing `.pyc` files.
+- **Network accessibility:** The server starts with `--host 0.0.0.0` so it is reachable through the published port.
+- **Exec-form `CMD`:** The JSON-array form runs Python directly as the main process, so it receives `docker stop`'s SIGTERM.
+- **Persistent storage:** The named volume `kv-data` is mounted at `/app/data`, so snapshot and WAL files survive container recreation.
+- **Small build context:** `.dockerignore` excludes Git metadata, virtual environments, Python caches, and local `data/` and `logs/` folders.
 
 ## API
 
@@ -366,34 +334,18 @@ Request and response bodies use JSON.
 | Request | Success | Errors |
 |---|---|---|
 | `GET /` | `200` server status and key count | |
-| `GET /<key>` | `200` with stored key and value | `404` key not found, `400` invalid key |
-| `PUT /<key>` | `201` created, `200` updated | `400` invalid JSON or missing value, `413` oversized request |
-| `POST /<key>` | `201` created, `200` updated | `400` invalid JSON or missing value, `413` oversized request |
+| `GET /<key>` | `200` with the stored key and value | `404` key not found, `400` key longer than 256 characters |
+| `PUT /<key>` with body `{"value": <any JSON value>}` | `201` created, `200` updated | `400` body not JSON or missing `value`, `413` body larger than 1 MiB |
+| `POST /<key>` | Same as PUT | Same as PUT |
 | `DELETE /<key>` | `200` deleted | `404` key not found |
 
-Unsupported methods return `405`, unknown URLs return `404`, and unexpected server errors return `500`.
-
-Errors use JSON responses containing an error type and message.
+Unsupported methods return `405`, unknown URLs return `404`, and unexpected server errors return `500`. Every error is JSON of the form `{"error": ..., "message": ...}`.
 
 ### API Examples (macOS / Linux)
 
-Create or update a key:
-
 ```bash
-curl -X PUT http://127.0.0.1:8080/demo-key \
-  -H "Content-Type: application/json" \
-  -d '{"value":"hello"}'
-```
-
-Retrieve the key:
-
-```bash
+curl -X PUT http://127.0.0.1:8080/demo-key -H "Content-Type: application/json" -d '{"value":"hello"}'
 curl http://127.0.0.1:8080/demo-key
-```
-
-Delete the key:
-
-```bash
 curl -X DELETE http://127.0.0.1:8080/demo-key
 ```
 
@@ -401,56 +353,46 @@ curl -X DELETE http://127.0.0.1:8080/demo-key
 
 ```powershell
 Invoke-RestMethod -Uri "http://127.0.0.1:8080/demo-key" -Method Put -ContentType "application/json" -Body '{"value":"hello"}'
-
 Invoke-RestMethod -Uri "http://127.0.0.1:8080/demo-key" -Method Get
-
 Invoke-RestMethod -Uri "http://127.0.0.1:8080/demo-key" -Method Delete
 ```
 
 ## Testing
 
-The project uses pytest for automated testing.
-
-From the project directory, run:
+The project uses pytest. With the virtual environment activated, run from the project root:
 
 ```bash
 python -m pytest -v
 ```
 
-On Windows, the virtual environment's Python executable can also be used:
+On Windows, the virtual environment's Python can also be used directly:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -v
 ```
 
-All **17 tests passed** in the local test run.
-
-The test suite covers:
+All **17 tests pass**. They cover:
 
 - API endpoint functionality
 - Error responses and request validation
 - Storage operations
-- Concurrent access
+- Concurrent access to the same key
 - Persistence across restarts
-- WAL recovery
+- WAL crash recovery
 - Snapshot behavior
-- Handling malformed log entries
+- Handling of malformed log entries
 
 ## Benchmarking
 
-The project includes `benchmark.py` for measuring throughput and latency under concurrent requests.
-
-Start the server, then run:
+`benchmark.py` measures throughput and latency with concurrent requests. Start the server (locally or in Docker), then run:
 
 ```bash
 python benchmark.py
 ```
 
-The current benchmark uses three concurrent worker threads and performs 300 writes followed by 300 reads.
+The benchmark uses three concurrent worker threads. It performs 300 writes, then reads back the same 300 keys and checks that every value matches what was written.
 
-It verifies that retrieved values match the values previously stored.
-
-### Local Benchmark Results
+### Local Server Results
 
 | Metric | Run 1 | Run 2 |
 |---|---:|---:|
@@ -462,21 +404,23 @@ It verifies that retrieved values match the values previously stored.
 | Total duration | 1.35 s | 1.31 s |
 | Overall throughput | 445.9 ops/s | 457.1 ops/s |
 
-These results demonstrate successful concurrent requests under the tested workload.
+### Docker Container Results (macOS, Docker Desktop)
 
-Performance may vary depending on system load, Docker configuration, storage performance, and the number of concurrent clients.
+| Phase | Successful | Errors | Mismatches | Throughput | Avg latency | p99 latency |
+|---|---:|---:|---:|---:|---:|---:|
+| SET | 300 | 0 | 0 | 137.5 ops/s | 21.73 ms | 110.51 ms |
+| GET | 300 | 0 | 0 | 252.5 ops/s | 11.83 ms | 19.71 ms |
+| **Total** | **600 in 3.37 s** | **0** | **0** | **178.1 ops/s** | | |
+
+All requests succeeded in both environments. Throughput is lower in Docker because Docker Desktop on macOS runs containers inside a Linux virtual machine and forwards port 8080 through a network proxy, which adds latency to every request. The server's own processing time stayed below 1 ms for most requests, according to the `latency_ms` values in its log.
+
+Results vary with system load, Docker configuration, storage performance and the number of concurrent clients.
 
 ## Logging and Persistence
 
 ### Request Logging
 
-The server logs requests to:
-
-```text
-logs/kvstore.log
-```
-
-The logs include request information such as:
+The server writes request logs to `logs/kvstore.log`, rotated at 10 MB with 5 old files kept. Each line includes:
 
 - Timestamp
 - HTTP method
@@ -485,68 +429,38 @@ The logs include request information such as:
 - Client address
 - Request latency
 
-Log files are rotated when they reach the configured size.
-
-Logs are also printed to the console and can be viewed through Docker using:
-
-```bash
-docker logs kv
-```
+Logs are also printed to the console, which is what `docker logs kv` shows when running in Docker.
 
 ### Write-Ahead Logging
 
-The application uses a write-ahead log to record PUT and DELETE operations.
+Every PUT and DELETE is appended to the write-ahead log and flushed before memory is changed or the client receives a response, so acknowledged writes survive a process crash.
 
-Each operation is appended to the WAL and flushed before the operation completes.
-
-The `--fsync` option can be enabled for stronger durability guarantees by requesting that writes be synchronized to disk.
-
-Without per-write `fsync`, WAL recovery can work after a process crash, but acknowledged writes are not guaranteed to survive sudden power loss or every underlying storage failure.
+The `--fsync` option forces each write to the physical disk for stronger durability. Without it, writes survive a process crash but may not survive a sudden power loss.
 
 ### Snapshots
 
-By default, the application creates a snapshot every 30 seconds.
-
-Snapshots capture the current key-value store and are written using a temporary file followed by an atomic rename.
-
-After creating a snapshot, the application rotates the WAL and removes older log files that are no longer needed.
+Every 30 seconds by default, a background thread saves the whole store to `snapshot.json`. It writes to a temporary file and then renames it atomically, so a crash during the save never leaves a broken snapshot. After each snapshot, the application starts a new WAL file and removes older ones that are no longer needed.
 
 ### Startup Recovery
 
-When the server starts:
+When the server starts, it:
 
-1. It loads the most recent snapshot, if available.
-2. It replays subsequent WAL entries.
-3. It reconstructs the in-memory key-value store.
-4. It begins accepting requests.
-
-This mechanism supports recovery after normal restarts and certain crash scenarios.
+1. Loads the most recent snapshot, if one exists.
+2. Replays WAL entries written after that snapshot.
+3. Rebuilds the in-memory key-value store.
+4. Starts accepting requests.
 
 ### Docker Volume Persistence
 
-When running with Docker, application data is stored in the named volume:
-
-```text
-kv-data
-```
-
-Mounted at:
-
-```text
-/app/data
-```
-
-This separates persistent storage from the container's writable layer.
-
-The data remains available when a container is stopped, removed, and recreated using the same volume.
+In Docker, the data lives in the named volume `kv-data`, mounted at `/app/data`. This keeps persistent storage separate from the container's writable layer, so the data remains available when a container is stopped, removed and recreated with the same volume.
 
 ## Future Improvements
 
-- Implement readers-writer or per-key locks to improve concurrency.
-- Introduce group commit to reduce the cost of frequent `fsync` operations.
-- Add compare-and-swap operations.
-- Support key expiration using TTL.
-- Add authentication and TLS.
-- Improve monitoring and operational metrics.
-- Extend benchmarks to larger workloads and higher concurrency.
-- Explore partitioning, replication, and distributed storage.
+- Readers-writer or per-key locks to improve concurrency.
+- Group commit to reduce the cost of frequent `fsync` calls.
+- Compare-and-swap operations and key expiry (TTL).
+- Authentication and TLS.
+- Monitoring and operational metrics, plus a Docker `HEALTHCHECK` using the `GET /` endpoint.
+- Running the container as a non-root user.
+- Benchmarks with larger workloads and higher concurrency.
+- Partitioning, replication and distributed storage.
