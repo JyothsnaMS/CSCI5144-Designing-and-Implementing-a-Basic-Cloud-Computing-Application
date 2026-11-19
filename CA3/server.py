@@ -45,7 +45,7 @@ def configure_logging(log_dir):
     return logger
 
 
-def create_app(store=None, log_dir="logs"):
+def create_app(store=None, log_dir="logs", node_id="store"):
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = MAX_BODY_SIZE
 
@@ -73,7 +73,8 @@ def create_app(store=None, log_dir="logs"):
         client_ip = request.remote_addr or "-"
 
         logger.info(
-            "operation=%s key=%r status=%s client=%s latency_ms=%.2f",
+            "node=%s operation=%s key=%r status=%s client=%s latency_ms=%.2f",
+            node_id,
             request.method,
             key,
             response.status_code,
@@ -99,10 +100,17 @@ def create_app(store=None, log_dir="logs"):
 
     @app.route("/", methods=["GET"])
     def health():
-        return jsonify({
+            return jsonify({
             "status": "running",
+            "node": node_id,
             "keys": len(app.extensions["kvstore"]),
         })
+
+    @app.route("/admin/keys", methods=["GET"])
+    def list_keys():
+        # Which keys this store holds; used to check key distribution and key movement.
+        keys = sorted(app.extensions["kvstore"].keys())
+        return jsonify({"node": node_id, "count": len(keys), "keys": keys})
 
     @app.route("/<key>", methods=["GET", "PUT", "POST", "DELETE"])
     def key_operations(key):
@@ -191,7 +199,10 @@ def main():
     parser.add_argument("--log-dir", default="logs")
     parser.add_argument("--snapshot-interval", type=float, default=30.0)
     parser.add_argument("--fsync", action="store_true")
+    parser.add_argument("--node-id", default=None,
+                        help="name of this store in logs and responses (default: store-PORT)")
     args = parser.parse_args()
+    node_id = args.node_id or f"store-{args.port}"
 
     store = KVStore(
         data_dir=args.data_dir,
@@ -199,7 +210,7 @@ def main():
         fsync=args.fsync,
     )
 
-    app = create_app(store=store, log_dir=args.log_dir)
+    app = create_app(store=store, log_dir=args.log_dir, node_id=node_id)
 
     from waitress import serve
 

@@ -49,6 +49,11 @@ class KVStore:
             del self._data[key]
             return True
 
+    def keys(self):
+        """A copy of all keys currently stored."""
+        with self._lock:
+            return list(self._data)
+
     def __len__(self):
         with self._lock:
             return len(self._data)
