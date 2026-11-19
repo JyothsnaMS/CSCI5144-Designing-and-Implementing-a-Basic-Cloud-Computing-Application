@@ -2,8 +2,8 @@ import os
 import sys
 import threading
 
-# lets this file import store.py from the folder above
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# lets this file import store.py from the CA1and2 folder
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "CA1and2"))
 from store import KVStore
 
 

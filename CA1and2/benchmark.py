@@ -1,9 +1,9 @@
 """KV-store benchmark: write every key, then read every key back and verify its value.
 
 Usage:
-  python kv_bench.py          # set phase, then get phase (read-after-write within one run)
-  python kv_bench.py set      # write only
-  python kv_bench.py get      # read + verify only, e.g. after restarting the server (durability)
+  python CA1and2/benchmark.py          # set phase, then get phase (read-after-write within one run)
+  python CA1and2/benchmark.py set      # write only
+  python CA1and2/benchmark.py get      # read + verify only, e.g. after restarting the server (durability)
 """
 import queue
 import sys
@@ -142,7 +142,7 @@ def report(name, stats, elapsed):
 if __name__ == '__main__':
     phases = sys.argv[1:] or ['set', 'get']
     if any(p not in ('set', 'get') for p in phases):
-        sys.exit("usage: python kv_bench.py [set] [get]")
+        sys.exit("usage: python CA1and2/benchmark.py [set] [get]")
 
     results = {}
     for phase in phases:

@@ -31,17 +31,25 @@ It demonstrates core cloud computing concepts: concurrent request handling, data
 
 ```text
 CSCI5144-Designing-and-Implementing-a-Basic-Cloud-Computing-Application/
-├── server.py            # HTTP server: API endpoints, validation, errors, logging
-├── store.py             # Key-value storage: locking, write-ahead log, snapshots, 
-├── benchmark.py         # Corrected benchmark that reads back the keys it writes
-├── try_store.py         # Small script for trying the storage layer directly
-├── requirements.txt     # Python dependencies
+├── CA1and2/
+│   ├── server.py            # HTTP server: API endpoints, validation, errors, logging
+│   ├── store.py             # Key-value storage: locking, write-ahead log, snapshots, recovery
+│   ├── benchmark.py         # Concurrent benchmark: writes keys, then reads them back and verifies
+│   ├── try_store.py         # Small script for trying the storage layer directly
+│   ├── Dockerfile           # Docker image build instructions (Coding Assignment 2)
+│   ├── README-CA1.md        # Coding Assignment 1 documentation (this file)
+│   ├── README-CA2.md        # Coding Assignment 2 documentation
+│   └── CSCI5144_ CodingAssignment1.pdf   # Coding Assignment 1 handout
+├── CA3/                     # Coding Assignment 3
+├── requirements.txt         # Python dependencies
 ├── tests/
-│   ├── test_server.py   # API endpoint tests
-│   └── test_store.py    # Storage, concurrency and recovery tests
-├── data/                # Snapshot and log files (created at runtime, not committed)
-└── logs/                # Request logs (created at runtime, not committed)
+│   ├── test_server.py       # API endpoint tests
+│   └── test_store.py        # Storage, concurrency and recovery tests
+├── data/                    # Snapshot and log files (created at runtime, not committed)
+└── logs/                    # Request logs (created at runtime, not committed)
 ```
+
+All commands below are run from the project root (the folder that contains `requirements.txt`). The server creates `data/` and `logs/` in the folder it is started from.
 
 ## Setup and Installation
 
@@ -65,10 +73,10 @@ pip install -r requirements.txt
 
 ## Running the Server
 
-With the virtual environment activated:
+With the virtual environment activated, from the project root:
 
 ```bash
-python server.py
+python CA1and2/server.py
 ```
 
 The server listens on `http://127.0.0.1:8080`. Keep it running and send requests from a second terminal. Stop it with **Ctrl+C**; it saves a final snapshot before exiting.
@@ -85,7 +93,7 @@ The server listens on `http://127.0.0.1:8080`. Keep it running and send requests
 | `--snapshot-interval` | `30` | Seconds between snapshots (`0` disables background snapshots) |
 | `--fsync` | off | Force every write to disk (survives power loss; slower) |
 
-Example: `python server.py --port 9000 --fsync`
+Example: `python CA1and2/server.py --port 9000 --fsync`
 
 ## API
 
@@ -119,7 +127,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8080/demo-key" -Method Delete
 
 ## Testing
 
-Stop the server, then run from the project folder:
+Stop the server, then run from the project root:
 
 ```bash
 python -m pytest -v
@@ -132,12 +140,14 @@ All **17 tests pass**. They cover the API endpoints, error responses, storage op
 Start the server in one terminal, then run in a second terminal:
 
 ```bash
-python benchmark.py          # benchmark provided with the assignment
+python CA1and2/benchmark.py          # set phase, then get phase
+python CA1and2/benchmark.py set      # write only
+python CA1and2/benchmark.py get      # read and verify only, e.g. after restarting the server
 ```
 
-**Note on `benchmark.py`:** it stores `key_0, key_2, key_4, ...` but reads `key_1, key_3, key_5, ...`, keys that are never stored. The server correctly answers those reads with `404 Not Found`, so the benchmark prints 150 "Error during get" lines. This is the required error handling working, not a failure. The benchmark also counts 600 operations while sending only 300, so its reported throughput is doubled.
+`benchmark.py` uses three concurrent worker threads. It writes 300 keys (`key_0` to `key_299`), then reads back the same 300 keys and checks that every value matches what was written. It reports successes, errors, value mismatches, throughput, and average and p99 latency for each phase. Each request is counted once.
 
-`benchmark_fixed.py` reads back the keys it writes. In our local run with three concurrent worker threads, 300 writes and 300 reads completed with no errors in about 0.69 seconds (about 869 operations per second). Writes averaged 3.77 ms (p99 8.33 ms) and reads 3.11 ms (p99 5.28 ms). These numbers are a local baseline under light load, not the system's maximum capacity.
+In our local run with three concurrent worker threads, 300 writes and 300 reads completed with no errors in about 0.69 seconds (about 869 operations per second). Writes averaged 3.77 ms (p99 8.33 ms) and reads 3.11 ms (p99 5.28 ms). These numbers are a local baseline under light load, not the system's maximum capacity.
 
 ## Logging and Persistence
 
@@ -153,7 +163,7 @@ To see recovery in action:
 
 1. Store a key: `curl -X PUT http://127.0.0.1:8080/survivor -H "Content-Type: application/json" -d '{"value": "still here"}'`
 2. Crash the server: press **Ctrl+\\** in its terminal (macOS/Linux), or close the terminal window (Windows).
-3. Start it again with `python server.py`.
+3. Start it again with `python CA1and2/server.py`.
 4. `curl http://127.0.0.1:8080/survivor` still returns the value.
 
 ## Future Improvements

@@ -1,6 +1,10 @@
+import os
+import sys
 
 import pytest
 
+# lets this file import server.py (and store.py) from the CA1and2 folder
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "CA1and2"))
 from server import create_app
 
 

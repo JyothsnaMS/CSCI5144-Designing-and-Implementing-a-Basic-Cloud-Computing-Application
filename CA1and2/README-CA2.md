@@ -40,20 +40,26 @@ It demonstrates core cloud computing concepts: concurrent request handling, data
 
 ```text
 CSCI5144-Designing-and-Implementing-a-Basic-Cloud-Computing-Application/
-├── server.py             # HTTP server: API endpoints, validation, logging, signal handling
-├── store.py              # Storage: locking, write-ahead log, snapshots, recovery
-├── benchmark.py          # Concurrent performance benchmark
-├── try_store.py          # Script for trying the storage layer directly
-├── requirements.txt      # Python dependencies
-├── Dockerfile            # Docker image build instructions
-├── .dockerignore         # Files excluded from the Docker build context
-├── README.md             # Project documentation
+├── CA1and2/
+│   ├── server.py             # HTTP server: API endpoints, validation, logging, signal handling
+│   ├── store.py              # Storage: locking, write-ahead log, snapshots, recovery
+│   ├── benchmark.py          # Concurrent performance benchmark
+│   ├── try_store.py          # Script for trying the storage layer directly
+│   ├── Dockerfile            # Docker image build instructions (built from the project root)
+│   ├── README-CA1.md         # Coding Assignment 1 documentation
+│   ├── README-CA2.md         # Coding Assignment 2 documentation (this file)
+│   └── CSCI5144_ CodingAssignment1.pdf   # Coding Assignment 1 handout
+├── CA3/                      # Coding Assignment 3
+├── requirements.txt          # Python dependencies
+├── .dockerignore             # Files excluded from the Docker build context
 ├── tests/
-│   ├── test_server.py    # API endpoint tests
-│   └── test_store.py     # Storage, concurrency and recovery tests
-├── data/                 # Snapshot and WAL files (created at runtime, not committed)
-└── logs/                 # Request logs (created at runtime, not committed)
+│   ├── test_server.py        # API endpoint tests
+│   └── test_store.py         # Storage, concurrency and recovery tests
+├── data/                     # Snapshot and WAL files (created at runtime, not committed)
+└── logs/                     # Request logs (created at runtime, not committed)
 ```
+
+All commands below are run from the project root (the folder that contains `requirements.txt`). The server creates `data/` and `logs/` in the folder it is started from.
 
 ## Setup and Installation
 
@@ -83,10 +89,10 @@ If PowerShell blocks activation, use the environment's Python directly:
 
 ## Running the Server Locally
 
-With the virtual environment activated:
+With the virtual environment activated, from the project root:
 
 ```bash
-python server.py
+python CA1and2/server.py
 ```
 
 The server listens on `http://127.0.0.1:8080`. Keep it running and send requests from a second terminal.
@@ -108,7 +114,7 @@ Press **Ctrl+C** to stop the server gracefully. The storage layer closes and sav
 Example:
 
 ```bash
-python server.py --port 9000 --fsync
+python CA1and2/server.py --port 9000 --fsync
 ```
 
 ## Running with Docker
@@ -120,7 +126,7 @@ Docker packages the server together with Python and all its dependencies, so it 
 | Requirement | How it is met |
 |---|---|
 | 1. Lightweight base image with Python | `FROM python:3.11-alpine` |
-| 2. Application files added to the image | `COPY server.py store.py ./` |
+| 2. Application files added to the image | `COPY CA1and2/server.py CA1and2/store.py ./` |
 | 3. Dependencies installed in the image | `COPY requirements.txt .` and `RUN pip install --no-cache-dir -r requirements.txt` |
 | 4. Server port exposed | `EXPOSE 8080`, published at run time with `-p 8080:8080` |
 | 5. Server starts automatically | `CMD ["python", "server.py", "--host", "0.0.0.0", "--port", "8080"]` |
@@ -128,17 +134,19 @@ Docker packages the server together with Python and all its dependencies, so it 
 ### Prerequisites
 
 - Docker Desktop installed and running ("Engine running").
-- Port 8080 free on the host. Stop any locally running `python server.py` first.
+- Port 8080 free on the host. Stop any locally running `python CA1and2/server.py` first.
 
 ### 1. Build the Docker Image
 
 From the project root:
 
 ```bash
-docker build -t kv-store .
+docker build -f CA1and2/Dockerfile -t kv-store .
 ```
 
-This builds an image named `kv-store` from the `Dockerfile`: Python 3.11 on Alpine Linux, the dependencies from `requirements.txt`, and the application files. The resulting image is about 115 MB.
+`-f CA1and2/Dockerfile` selects the Dockerfile, and the final `.` makes the project root the build context, so `requirements.txt`, the `CA1and2/` source files and `.dockerignore` are all found.
+
+This builds an image named `kv-store` from `CA1and2/Dockerfile`: Python 3.11 on Alpine Linux, the dependencies from `requirements.txt`, and the application files. The resulting image is about 115 MB.
 
 Check that it exists:
 
@@ -193,7 +201,7 @@ Invoke-RestMethod -Method Delete -Uri "http://localhost:8080/docker-test"
 The benchmark also runs unchanged against the container, from the host:
 
 ```bash
-python benchmark.py
+python CA1and2/benchmark.py
 ```
 
 #### Verified results (macOS, Docker Desktop)
@@ -309,7 +317,7 @@ This demonstrates recovery after a process crash. Without `--fsync`, a sudden po
 
 `docker stop kv` sends SIGTERM to the container's main process:
 
-1. The Python signal handler in `server.py` raises `KeyboardInterrupt`.
+1. The Python signal handler in `CA1and2/server.py` raises `KeyboardInterrupt`.
 2. The server's cleanup code calls the storage layer's `close()` method.
 3. The storage layer stops its background snapshot thread, writes a final snapshot and closes the WAL.
 
@@ -384,10 +392,10 @@ All **17 tests pass**. They cover:
 
 ## Benchmarking
 
-`benchmark.py` measures throughput and latency with concurrent requests. Start the server (locally or in Docker), then run:
+`CA1and2/benchmark.py` measures throughput and latency with concurrent requests. Start the server (locally or in Docker), then run:
 
 ```bash
-python benchmark.py
+python CA1and2/benchmark.py
 ```
 
 The benchmark uses three concurrent worker threads. It performs 300 writes, then reads back the same 300 keys and checks that every value matches what was written.

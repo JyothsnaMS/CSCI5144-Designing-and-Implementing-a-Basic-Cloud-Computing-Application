@@ -1,3 +1,6 @@
+# Build from the project root (the folder that holds requirements.txt):
+#   docker build -f CA1and2/Dockerfile -t kv-store .
+
 # Base image: small Alpine Linux with Python 3.11 installed
 FROM python:3.11-alpine
 
@@ -13,7 +16,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the application code
-COPY server.py store.py ./
+COPY CA1and2/server.py CA1and2/store.py ./
 
 # The port the server listens on
 EXPOSE 8080
