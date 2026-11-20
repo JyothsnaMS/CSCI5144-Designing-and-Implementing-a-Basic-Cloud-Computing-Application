@@ -1,0 +1,41 @@
+{
+  "timestamp": "2026-11-20T17:34:48",
+  "url": "http://router:8000",
+  "settings": {
+    "url": "http://router:8000",
+    "ops": 3000,
+    "threads": 8,
+    "value_size": 100,
+    "warmup": 200,
+    "stores": 0,
+    "run": 1,
+    "keep": true,
+    "out_dir": "benchmark_results/key_movement"
+  },
+  "results": [
+    {
+      "phase": "PUT",
+      "successes": 3000,
+      "errors": 0,
+      "mismatches": 0,
+      "seconds": 17.963,
+      "throughput_ops_s": 167.0,
+      "avg_ms": 46.76,
+      "p50_ms": 40.85,
+      "p95_ms": 90.63,
+      "p99_ms": 138.36
+    },
+    {
+      "phase": "GET",
+      "successes": 3000,
+      "errors": 0,
+      "mismatches": 0,
+      "seconds": 16.613,
+      "throughput_ops_s": 180.6,
+      "avg_ms": 43.16,
+      "p50_ms": 38.14,
+      "p95_ms": 84.25,
+      "p99_ms": 131.0
+    }
+  ]
+}
